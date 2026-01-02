@@ -2835,7 +2835,8 @@
         
         let userId = null;
         let hasSchedulePermission = false; // 新增：排班权限标记，只有用户名为admin时为true
-        const apiBaseUrl = 'http://47.95.157.46:8520/api';
+        const apiBaseUrl = 'http://47.104.72.198:3000';
+        const loginApiUrl = 'http://47.95.157.46:8520/api';  // 登录API保持旧服务器
         const paymentApiUrl = 'http://59.110.116.113:8000/api/get_pay_url';
         const loginKey = 'purchaseManagementLogin';
         
@@ -2911,17 +2912,14 @@
                 const savedCategoryFilter = currentCategoryFilter;
                 const savedTaskId = currentTaskId;
                 
-                const formData = new URLSearchParams();
-                formData.append('conductor', userId);
-                
                 const response = await fetch(`${apiBaseUrl}/get_purchase_iw_task`, {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded'
+                        'Content-Type': 'application/json'
                     },
-                    body: formData
+                    body: JSON.stringify({ conductor: String(userId) })
                 });
-                
+
                 const result = await response.json();
                 console.log('刷新任务列表结果:', result);
                 
@@ -3312,7 +3310,7 @@
                 formData.append('acct', username);
                 formData.append('password', password);
                 
-                const response = await fetch(`${apiBaseUrl}/csdl`, {
+                const response = await fetch(`${loginApiUrl}/csdl`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/x-www-form-urlencoded'
@@ -3388,21 +3386,18 @@
         
         async function fetchTasks() {
             if (!userId) return;
-            
+
             sidebarContent.innerHTML = '<div class="loading">正在加载任务...</div>';
-            
+
             try {
-                const formData = new URLSearchParams();
-                formData.append('conductor', userId);
-                
                 const response = await fetch(`${apiBaseUrl}/get_purchase_iw_task`, {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded'
+                        'Content-Type': 'application/json'
                     },
-                    body: formData
+                    body: JSON.stringify({ conductor: String(userId) })
                 });
-                
+
                 const result = await response.json();
                 console.log('任务列表结果:', result);
                 
@@ -3847,17 +3842,14 @@
             
             return globalRequestQueue.add(async () => {
                 try {
-                    const formData = new URLSearchParams();
-                    formData.append('invoice_id', invoiceId);
-                    
                     const response = await fetch(`${apiBaseUrl}/get_task_purchase_iw`, {
                         method: 'POST',
                         headers: {
-                            'Content-Type': 'application/x-www-form-urlencoded'
+                            'Content-Type': 'application/json'
                         },
-                        body: formData
+                        body: JSON.stringify({ invoice_id: String(invoiceId) })
                     });
-                    
+
                     const result = await response.json();
                     console.log('采购任务信息结果:', result);
                     
@@ -3890,18 +3882,14 @@
             
             return globalRequestQueue.add(async () => {
                 try {
-                    const formData = new URLSearchParams();
-                    formData.append('id', invoiceId);
-                    formData.append('searchDate', getCurrentDate());
-                    
                     const response = await fetch(`${apiBaseUrl}/get_purchase_info`, {
                         method: 'POST',
                         headers: {
-                            'Content-Type': 'application/x-www-form-urlencoded'
+                            'Content-Type': 'application/json'
                         },
-                        body: formData
+                        body: JSON.stringify({ id: String(invoiceId), searchDate: getCurrentDate() })
                     });
-                    
+
                     const result = await response.json();
                     console.log('采购单信息结果:', result);
                     
@@ -3933,17 +3921,14 @@
             if (cached) return cached;
             
             return globalRequestQueue.add(async () => {
-                const formData = new URLSearchParams();
-                formData.append('id', invoiceId);
-                
                 const response = await fetch(`${apiBaseUrl}/get_last_invoices_feedbacks`, {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded'
+                        'Content-Type': 'application/json'
                     },
-                    body: formData
+                    body: JSON.stringify({ id: String(invoiceId) })
                 });
-                
+
                 const result = await response.json();
                 console.log('反馈信息结果:', result);
                 
@@ -4085,18 +4070,14 @@
                     
                     const promises = purchaseNumberList.map(async (purchaseNumber) => {
                         try {
-                            const formData = new URLSearchParams();
-                            formData.append('conductor', userId);
-                            formData.append('purchaseOrderId', purchaseNumber);
-                            
                             const response = await fetch(`${apiBaseUrl}/get_place_status`, {
                                 method: 'POST',
                                 headers: {
-                                    'Content-Type': 'application/x-www-form-urlencoded'
+                                    'Content-Type': 'application/json'
                                 },
-                                body: formData
+                                body: JSON.stringify({ conductor: String(userId), purchaseOrderId: purchaseNumber })
                             });
-                            
+
                             const result = await response.json();
                             console.log(`采购单${purchaseNumber}下单状态结果:`, result);
                             
@@ -4169,18 +4150,14 @@
 
         async function updatePurchaseOrderStatus(taskId, newStatus) {
             try {
-                const formData = new URLSearchParams();
-                formData.append('id', taskId);
-                formData.append('status', newStatus.toString());
-                
                 const response = await fetch(`${apiBaseUrl}/purchase_orders`, {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded'
+                        'Content-Type': 'application/json'
                     },
-                    body: formData
+                    body: JSON.stringify({ id: String(taskId), status: String(newStatus) })
                 });
-                
+
                 const result = await response.json();
                 console.log(`更新任务${taskId}采购单状态结果:`, result);
                 
@@ -5454,20 +5431,16 @@
 
         async function handleOrder(purchaseNumber) {
             console.log('处理下单:', purchaseNumber);
-            
+
             try {
-                const formData = new URLSearchParams();
-                formData.append('conductor', userId);
-                formData.append('purchaseOrderId', purchaseNumber);
-                
                 const response = await fetch(`${apiBaseUrl}/post_place_order_task`, {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded'
+                        'Content-Type': 'application/json'
                     },
-                    body: formData
+                    body: JSON.stringify({ conductor: String(userId), purchaseOrderId: purchaseNumber })
                 });
-                
+
                 const result = await response.json();
                 console.log('下单任务提交结果:', result);
                 
