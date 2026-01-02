@@ -1736,10 +1736,26 @@
             transform: translateY(-20px);
         }
 
+        .refresh-button-wrapper {
+            display: inline-block;
+            margin-right: 12px;
+            text-align: center;
+        }
+
+        .refresh-hint {
+            font-size: 11px;
+            color: #999;
+            margin-bottom: 4px;
+        }
+
         .refresh-button, .toggle-orders-button, .purchase-wait-button, .check-orders-button {
             position: relative;
             display: inline-block;
             margin-right: 12px;
+        }
+
+        .refresh-button-wrapper .refresh-button {
+            margin-right: 0;
         }
 
         .refresh-button-inner, .toggle-orders-button-inner, .purchase-wait-button-inner, .check-orders-button-inner {
@@ -3423,16 +3439,18 @@
 
         async function preloadTaskErrors(tasks) {
             tasksWithErrors.clear();
-            
+
             try {
                 const promises = tasks.map(async (task) => {
                     try {
-                        const purchaseInfo = await fetchPurchaseInfo(task.id);
+                        // 先获取订单信息
+                        const taskInfo = await fetchPurchaseTaskInfo(task.id);
+                        const purchaseInfo = await fetchPurchaseInfo(task.id, taskInfo.orders);
                         if (purchaseInfo.purchases && purchaseInfo.purchases.length > 0) {
                             const purchaseNumbers = purchaseInfo.purchases.map(p => p.dxm_po_number).filter(num => num);
                             if (purchaseNumbers.length > 0) {
                                 const purchaseErrors = await fetchPurchaseOrderErrors(purchaseNumbers);
-                                
+
                                 const hasAnyError = Object.values(purchaseErrors).some(errorInfo => errorInfo.hasError);
                                 if (hasAnyError) {
                                     tasksWithErrors.add(task.id);
@@ -3443,7 +3461,7 @@
                         console.error(`预加载任务${task.id}错误信息失败:`, error);
                     }
                 });
-                
+
                 await Promise.all(promises);
                 console.log('预加载完成，有错误的任务:', Array.from(tasksWithErrors));
             } catch (error) {
@@ -3635,13 +3653,15 @@
         async function loadTaskDetail(invoiceId) {
             try {
                 console.log('开始加载任务详情...');
-                
+
                 const taskInfo = await fetchPurchaseTaskInfo(invoiceId);
-                const purchaseInfo = await fetchPurchaseInfo(invoiceId);
+                taskOrdersData[invoiceId] = taskInfo.orders;
+
+                // 传入订单列表以便获取SKU信息
+                const purchaseInfo = await fetchPurchaseInfo(invoiceId, taskInfo.orders);
                 const feedbackData = await fetchFeedbackData(invoiceId);
                 const purchaseOrderStatus = await fetchPurchaseOrderStatus(invoiceId);
-                
-                taskOrdersData[invoiceId] = taskInfo.orders;
+
                 taskPurchaseData[invoiceId] = purchaseInfo.purchases;
                 taskPurchaseOrderStatusData[invoiceId] = purchaseOrderStatus;
                 
@@ -3763,8 +3783,11 @@
                             <div class="toggle-orders-button" onclick="toggleCollapsedOrders('${task.id}')">
                                 <div class="toggle-orders-button-inner" id="toggle-text-${task.id}">折叠订单</div>
                             </div>
-                            <div class="refresh-button" onclick="refreshTask('${task.id}')">
-                                <div class="refresh-button-inner">刷新此任务</div>
+                            <div class="refresh-button-wrapper">
+                                <div class="refresh-hint">数据可能有缓存，可点击此按钮刷新</div>
+                                <div class="refresh-button" onclick="refreshTask('${task.id}')">
+                                    <div class="refresh-button-inner">刷新此任务</div>
+                                </div>
                             </div>
                             <div class="task-time">加入时间: ${task.queue_entry_time || '未知'}</div>
                         </div>
@@ -3875,42 +3898,76 @@
             });
         }
         
-        async function fetchPurchaseInfo(invoiceId) {
+        async function fetchPurchaseInfo(invoiceId, orders) {
             const cacheKey = `purchaseInfo_${invoiceId}`;
             const cached = CacheManager.get(cacheKey);
             if (cached) return cached;
-            
+
             return globalRequestQueue.add(async () => {
                 try {
-                    const response = await fetch(`${apiBaseUrl}/get_purchase_info`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({ id: String(invoiceId), searchDate: getCurrentDate() })
+                    // 收集所有符合条件订单的店小秘SKU
+                    const allSkus = [];
+                    if (orders && orders.length > 0) {
+                        orders.forEach(order => {
+                            // 只处理purchase_task不为空的订单（移仓状态为"是"）
+                            if (order.purchase_task) {
+                                const skus = parseJsonArray(order.product_sku_info);
+                                skus.forEach(sku => {
+                                    if (sku && !allSkus.includes(sku)) {
+                                        allSkus.push(sku);
+                                    }
+                                });
+                            }
+                        });
+                    }
+
+                    console.log('需要查询的SKU列表:', allSkus);
+
+                    if (allSkus.length === 0) {
+                        return { purchases: [] };
+                    }
+
+                    // 对每个SKU调用新接口
+                    const purchaseMap = new Map(); // 用于按dxm_po_number去重
+                    const currentDate = getCurrentDate();
+
+                    const promises = allSkus.map(async (sku) => {
+                        try {
+                            const response = await fetch(`${apiBaseUrl}/sku_data/getPurchaseOrderDetailBySkuAndDate`, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json'
+                                },
+                                body: JSON.stringify({ dxm_sku: sku, created_at: currentDate })
+                            });
+
+                            const result = await response.json();
+                            console.log(`SKU ${sku} 采购单信息结果:`, result);
+
+                            if (result.success && result.data) {
+                                const data = result.data;
+                                // 按dxm_po_number去重
+                                if (data.dxm_po_number && !purchaseMap.has(data.dxm_po_number)) {
+                                    purchaseMap.set(data.dxm_po_number, data);
+                                }
+                            }
+                        } catch (error) {
+                            console.error(`获取SKU ${sku} 采购单信息错误:`, error);
+                        }
                     });
 
-                    const result = await response.json();
-                    console.log('采购单信息结果:', result);
-                    
-                    if (result.success && result.data) {
-                        const purchaseInfo = {
-                            purchases: result.data
-                        };
-                        
-                        CacheManager.set(cacheKey, purchaseInfo, CacheManager.config.purchaseInfo);
-                        
-                        return purchaseInfo;
-                    } else {
-                        return {
-                            purchases: []
-                        };
-                    }
+                    await Promise.all(promises);
+
+                    const purchases = Array.from(purchaseMap.values());
+                    console.log('去重后的采购单列表:', purchases);
+
+                    const purchaseInfo = { purchases };
+                    CacheManager.set(cacheKey, purchaseInfo, CacheManager.config.purchaseInfo);
+
+                    return purchaseInfo;
                 } catch (error) {
                     console.error('获取采购单信息错误:', error);
-                    return {
-                        purchases: []
-                    };
+                    return { purchases: [] };
                 }
             });
         }
