@@ -2853,7 +2853,8 @@
         let hasSchedulePermission = false; // 新增：排班权限标记，只有用户名为admin时为true
         const apiBaseUrl = 'http://47.104.72.198:3000';
         const loginApiUrl = 'http://47.95.157.46:8520/api';  // 登录API保持旧服务器
-        const paymentApiUrl = 'http://59.110.116.113:8000/api/get_pay_url';
+        const paymentApiUrl = 'http://47.104.72.198:8000/api/pay-url';
+        const paymentStatusApiUrl = 'http://47.104.72.198:8000/api/pay-status';
         const loginKey = 'purchaseManagementLogin';
         
         let currentTaskId = null;
@@ -5292,7 +5293,7 @@
                 console.error('获取付款链接错误:', error);
                 showPaymentLinkModal({
                     success: false,
-                    errorMsg: '网络错误: ' + error.message
+                    error_msg: '网络错误: ' + error.message
                 });
             } finally {
                 hideLoadingOverlay();
@@ -5304,15 +5305,15 @@
             const title = document.getElementById('payment-link-modal-title');
             const contentDiv = document.getElementById('payment-link-modal-content');
             
-            // 适配新API格式
+            // 适配新API格式（使用下划线命名）
             const success = result.success === true || result.success === "true";
-            const totalCount = result.totalCount || 0;
-            const successCount = result.successCount || 0;
-            const failedCount = result.failedCount || 0;
-            const payUrl = result.payUrl || '';
-            const errorMsg = result.errorMsg || '';
-            const successOrderIds = result.successOrderIds || [];
-            const failedOrderIds = result.failedOrderIds || [];
+            const totalCount = result.total_count || 0;
+            const successCount = result.success_count || 0;
+            const failedCount = result.failed_count || 0;
+            const payUrl = result.pay_url || '';
+            const errorMsg = result.error_msg || '';
+            const successOrderIds = result.success_order_ids || [];
+            const failedOrderIds = result.failed_order_ids || [];
             
             let htmlContent = '';
             
@@ -5433,29 +5434,26 @@
                 updatePaymentStatusUI(purchaseNumber, '无订单号', 'error');
                 return;
             }
-            
+
             try {
-                const response = await fetch(`http://59.110.116.113:8000/api/order-status/${orderId1688}`, {
+                const response = await fetch(`${paymentStatusApiUrl}/${orderId1688}`, {
                     method: 'GET',
                     timeout: 10000
                 });
-                
+
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
-                
+
                 const result = await response.json();
                 console.log(`订单${orderId1688}支付状态查询结果:`, result);
-                
-                if (result.success === "true" && result.result && result.result.productItems && result.result.productItems.length > 0) {
-                    const statusStr = result.result.productItems[0].statusStr;
-                    if (statusStr) {
-                        updatePaymentStatusUI(purchaseNumber, statusStr, 'success');
-                    } else {
-                        updatePaymentStatusUI(purchaseNumber, '状态未知', 'error');
-                    }
+
+                // 适配新API格式：直接读取 pay_status 字段
+                if (result.success === true && result.pay_status) {
+                    updatePaymentStatusUI(purchaseNumber, result.pay_status, 'success');
                 } else {
-                    updatePaymentStatusUI(purchaseNumber, '查询失败', 'error');
+                    const errorMsg = result.error_msg || '查询失败';
+                    updatePaymentStatusUI(purchaseNumber, errorMsg, 'error');
                 }
             } catch (error) {
                 console.error(`查询订单${orderId1688}支付状态失败:`, error);
