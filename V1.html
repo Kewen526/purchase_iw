@@ -3876,14 +3876,25 @@
 
                     const result = await response.json();
                     console.log('采购任务信息结果:', result);
-                    
-                    if (result.success && result.data && result.data.length > 0) {
+
+                    // 兼容数组和单个对象两种API返回格式
+                    let ordersData = [];
+                    if (result.success && result.data) {
+                        if (Array.isArray(result.data)) {
+                            ordersData = result.data;
+                        } else if (typeof result.data === 'object') {
+                            // 单个对象转换为数组
+                            ordersData = [result.data];
+                        }
+                    }
+
+                    if (ordersData.length > 0) {
                         const taskInfo = {
-                            orders: result.data
+                            orders: ordersData
                         };
-                        
+
                         CacheManager.set(cacheKey, taskInfo, CacheManager.config.purchaseTaskInfo);
-                        
+
                         return taskInfo;
                     } else {
                         return {
