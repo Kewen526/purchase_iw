@@ -3621,7 +3621,12 @@
             document.querySelectorAll('.sidebar-item').forEach(item => {
                 item.addEventListener('click', () => {
                     const taskId = item.getAttribute('data-task-id');
-                    selectTask(taskId);
+                    // 设置active状态
+                    document.querySelectorAll('.sidebar-item').forEach(i => i.classList.remove('active'));
+                    item.classList.add('active');
+                    currentTaskId = taskId;
+                    // 强制刷新，不使用缓存
+                    refreshTask(taskId);
                 });
             });
         }
