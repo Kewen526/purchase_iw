@@ -4643,8 +4643,8 @@
                             
                             html += `
                                 <div class="purchase-product-item">
-                                    <img src="${imgurls[i] || purchase.image_url || 'https://via.placeholder.com/150'}" 
-                                         alt="${name}" class="purchase-product-image">
+                                    <img src="${imgurls[i] || purchase.image_url || 'https://via.placeholder.com/150'}"
+                                         alt="${name}" class="purchase-product-image" referrerpolicy="no-referrer">
                                     <div class="purchase-product-info">
                                         <div class="purchase-product-name">${name}</div>
                                         <div class="purchase-product-sku">${skus[i] || '无SKU'}</div>
@@ -4786,7 +4786,7 @@
                         html += `
                             <div class="product-row">
                                 <div class="product-image-container">
-                                    <img src="${product.imgUrl}" alt="${product.title}" class="product-image">
+                                    <img src="${product.imgUrl}" alt="${product.title}" class="product-image" referrerpolicy="no-referrer">
                                 </div>
                                 <div class="product-info-container">
                                     <div class="product-title">
@@ -5448,8 +5448,8 @@
                 const result = await response.json();
                 console.log(`订单${orderId1688}支付状态查询结果:`, result);
 
-                // 适配新API格式：直接读取 pay_status 字段
-                if (result.success === true && result.pay_status) {
+                // 适配新API格式：直接读取 pay_status 字段（兼容布尔值和字符串类型的success）
+                if ((result.success === true || result.success === "true") && result.pay_status) {
                     updatePaymentStatusUI(purchaseNumber, result.pay_status, 'success');
                 } else {
                     const errorMsg = result.error_msg || '查询失败';
