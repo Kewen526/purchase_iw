@@ -4756,6 +4756,14 @@
             html += '<div class="products-container">';
             
             try {
+                // 收集该任务所有采购单的SKU集合
+                const purchasedSkuSet = new Set();
+                const purchaseDataForTask = taskPurchaseData[invoiceId] || [];
+                purchaseDataForTask.forEach(purchase => {
+                    const purchaseSkus = parseJsonArray(purchase.sku);
+                    purchaseSkus.forEach(sku => purchasedSkuSet.add(sku));
+                });
+
                 const productImgs = parseJsonArray(order.product_img);
                 const variants = parseJsonArray(order.stop_product_variant);
                 const quantities = parseJsonArray(order.num);
@@ -4764,7 +4772,7 @@
                 const skus = parseJsonArray(order.product_sku_info);
                 const statuses = parseJsonArray(order.status);
                 const purchaseStatuses = parseJsonArray(order.purchase_status);
-                
+
                 const productCount = Math.max(
                     productImgs.length,
                     variants.length,
@@ -4773,11 +4781,13 @@
                     purchaseStatuses.length,
                     1
                 );
-                
+
                 let displayableProducts = [];
                 for (let i = 0; i < productCount; i++) {
                     const purchaseStatus = purchaseStatuses[i] || '否';
-                    if (order.purchase_task && purchaseStatus === '是') {
+                    const productSku = skus[i] || '';
+                    // 隐藏条件：订单有采购任务 且 产品SKU在采购单SKU集合中
+                    if (order.purchase_task && purchasedSkuSet.has(productSku)) {
                         continue;
                     }
                     displayableProducts.push({
